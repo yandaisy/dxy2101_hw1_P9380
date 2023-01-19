@@ -182,8 +182,8 @@ map7 = ggplot(nj_rwj_df) +
                                    "high")) +
   ggtitle("County Level Quality of Life Rank") +
   theme(axis.text=element_text(size=8),                       
-        axis.title=element_text(size=8,face="bold"),
-        plot.title = element_text(face="bold",size=12,hjust = 0.5),
+        axis.title=element_text(size=8),
+        plot.title = element_text(size=12,hjust = 0.5),
         axis.ticks = element_blank(),
         axis.text.y = element_blank(),
         axis.text.x = element_blank(),
@@ -207,8 +207,8 @@ map8 = ggplot(nj_rwj_df) +
                                    "high")) +
   ggtitle("County Level Racial Diversity") +
   theme(axis.text=element_text(size=8),                       
-        axis.title=element_text(size=8,face="bold"),
-        plot.title = element_text(face="bold",size=12,hjust = 0.5),
+        axis.title=element_text(size=8),
+        plot.title = element_text(size=12,hjust = 0.5),
         axis.ticks = element_blank(),
         axis.text.y = element_blank(),
         axis.text.x = element_blank(),
@@ -266,7 +266,6 @@ plot2
 
 ```{r final, message=FALSE}
 # create multipanel figure
-# TO DO: add a overall title
 full_plot = ggarrange(map7,
                        map8,
                        plot1,
@@ -274,6 +273,10 @@ full_plot = ggarrange(map7,
                        ncol = 2,
                        nrow = 2)
 
-full_plot
+# add overall title
+final_plot = annotate_figure(full_plot, top = text_grob("County Level Quality of Life and Racial Diversity in New Jersey", 
+               color = "black", face = "bold", size = 14))
+
+final_plot
 ```
 
