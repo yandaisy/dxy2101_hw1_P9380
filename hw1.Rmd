@@ -5,8 +5,275 @@ date: "2023-01-19"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, echo=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(data.table)
+library(tidycensus)
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(RColorBrewer)
+census_api_key("aa512886c5449a582d837da8d3a07af66a043fe5")
 ```
 
+Lab goal is to create a county level map of Quality of Life Index Ranking from the Robert Wood Johnson Foundation (obtained from here: https://www.countyhealthrankings.org/).
+
+```{r census, include=FALSE, echo=FALSE, message=FALSE}
+census_data = load_variables(2010, "sf1", cache=T)
+# decennial census data e.g. summary file 1, summary file 2, etc.
+# cache = T acquires data quicker
+# census data is type table data frame
+
+# create object with desired variables
+vars = c(tpop = 'P001001', # total population
+         medage = 'P013001', # median age
+         wpop = 'P003002', # white population
+         bpop = 'P003003', # black population
+         apop = 'P003005', # asian population
+         hpop = 'P004003') # hispanic population
+
+# get census data for New Jersey
+NJ_df = get_decennial(state = "nj", 
+                       geography = "county",
+                       variables = vars,
+                       geometry = T,
+                       output = "wide") # spatial data often works better wide
+```
+
+# Assess diversity
+
+```{r simpson, message=FALSE}
+# create new variables - percentage of county with xx race
+NJ_df$wpct = (NJ_df$wpop / NJ_df$tpop) *100
+NJ_df$bpct = (NJ_df$bpop / NJ_df$tpop) *100
+NJ_df$apct = (NJ_df$apop / NJ_df$tpop) *100
+NJ_df$hpct = (NJ_df$hpop / NJ_df$tpop) *100
+
+# compute Simpson's Diversity Index **D = ((SUM n(n-1))/N(N-1))**
+# higher value indicates higher diversity
+NJ_df$race_div = 1 - (((NJ_df$wpop*(NJ_df$wpop-1))+
+                         (NJ_df$bpop*(NJ_df$bpop-1))+
+                         (NJ_df$hpop*(NJ_df$hpop-1))+
+                         (NJ_df$apop*(NJ_df$apop-1)))/
+                         (NJ_df$tpop*(NJ_df$tpop-1)))
+```
+
+# Load Quality of Life data
+
+```{r rwj, message=FALSE}
+rwj = fread("rwj_rank.csv", 
+             stringsAsFactors = F, # ensures characters remain characters
+             data.table = F, 
+             colClasses=list(character=c("FIPS"))) # read FIPS as a character
+
+nj_rwj = subset(rwj, State == "New Jersey") 
+# subset allows you to create a new data frame 
+
+# merge datasets
+nj_rwj_df = merge(NJ_df, 
+                   nj_rwj,
+                   by.x = "GEOID",
+                   by.y = "FIPS")
+
+nj_rwj_df$QL.Rank = as.numeric(nj_rwj_df$QL.Rank)
+```
+
+# Visualization
+
+```{r map1, message=FALSE}
+map1 = ggplot(nj_rwj_df) +
+  geom_sf(aes(fill = cut_number(QL.Rank, 5))) 
+# geom_sf tells R the structure going into the plot
+
+map1
+```
+
+```{r map2, message=FALSE}
+map2 = ggplot(nj_rwj_df, aes(fill = QL.Rank)) +
+  geom_sf() +
+  #scale_fill_continuous(low = "#34E8EB", high = "#3D34EB") +
+  scale_fill_continuous(low = "lightgreen", high = "darkgreen") +
+  ggtitle("County Level Quality of Life Rank") +
+  theme(line = element_blank(),                          
+        axis.text=element_blank(),                       
+        axis.title=element_blank(),                      
+        panel.background = element_blank()) 
+
+map2
+
+nj_rwj_df$QL.Rank <- (nj_rwj_df$QL.Rank - 63) * -1
+```
+
+```{r map3, message=FALSE}
+map3 = ggplot(nj_rwj_df) +
+  geom_sf(aes(fill=QL.Rank)) +
+  scale_fill_continuous(low = "lightgreen", high = "darkgreen") +
+  ggtitle("County Level Quality of Life Rank") +
+  theme(axis.text=element_text(size=8),                       
+        axis.title=element_text(size=8,face="bold"),
+        plot.title = element_text(hjust = 0.5))  
+
+map3
+```
+
+```{r map4, message=FALSE}
+map4 = ggplot(nj_rwj_df) +
+  geom_sf(aes(fill=QL.Rank)) +
+  scale_fill_continuous(low = "lightgreen", high = "darkgreen") +
+  ggtitle("County Level Quality of Life Rank") +
+  theme(axis.text=element_text(size=8),                       
+        axis.title=element_text(size=8,face="bold"),
+        plot.title = element_text(face="bold",size=12,hjust = 0.5)) 
+
+map4
+```
+
+```{r map5, message=FALSE}
+map5 = ggplot(nj_rwj_df) +
+  geom_sf(aes(fill=QL.Rank)) +
+  scale_fill_continuous(low = "lightgreen", high = "darkgreen") +
+  ggtitle("County Level Quality of Life Rank") +
+  theme(axis.text=element_text(size=8),                       
+        axis.title=element_text(size=8,face="bold"),
+        plot.title = element_text(face="bold",size=12,hjust = 0.5),
+        axis.ticks = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = c(0.9,0.5)) 
+
+map5
+```
+
+```{r map6, message=FALSE}
+map6 = ggplot(nj_rwj_df) +
+  geom_sf(aes(fill=QL.Rank)) +
+  scale_fill_continuous(low = "lightgreen", high = "darkgreen",
+                        breaks = c(12, 24, 36, 48, 60),
+                        name = "Quality of Life",
+                        labels = c("low",
+                                   "", # "" indicates empty
+                                   "",
+                                   "",
+                                   "high")) +
+  ggtitle("County Level Quality of Life Rank") +
+  theme(axis.text=element_text(size=8),                       
+        axis.title=element_text(size=8,face="bold"),
+        plot.title = element_text(face="bold",size=12,hjust = 0.5),
+        axis.ticks = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = c(0.9,0.5)) 
+
+map6
+```
+
+```{r map7, message=FALSE}
+map7 = ggplot(nj_rwj_df) +
+  geom_sf(aes(fill=QL.Rank)) +
+  scale_fill_continuous(low = "lightgreen", high = "darkgreen",
+                        breaks = c(3, 12, 24, 36, 48, 60),
+                        name = "Quality\nof\nLife", # \n puts words to next line
+                        labels = c("low",
+                                   "",
+                                   "",
+                                   "",
+                                   "",
+                                   "high")) +
+  ggtitle("County Level Quality of Life Rank") +
+  theme(axis.text=element_text(size=8),                       
+        axis.title=element_text(size=8,face="bold"),
+        plot.title = element_text(face="bold",size=12,hjust = 0.5),
+        axis.ticks = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = c(1.2,0.5), # c(horizontal, vertical)
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8)) 
+
+map7
+```
+
+```{r map8, message=FALSE}
+map8 = ggplot(nj_rwj_df) +
+  geom_sf(aes(fill = race_div)) +
+  scale_fill_continuous(low = "lightgreen", high = "darkgreen",
+                        breaks = c(0.05, 0.1, 0.16, 0.31, 0.65), # tick marks
+                        name = "Racial\nDiversity",
+                        labels = c("low",
+                                   "",
+                                   "",
+                                   "",
+                                   "high")) +
+  ggtitle("County Level Racial Diversity") +
+  theme(axis.text=element_text(size=8),                       
+        axis.title=element_text(size=8,face="bold"),
+        plot.title = element_text(face="bold",size=12,hjust = 0.5),
+        axis.ticks = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = c(1.2,0.5),
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8)) 
+
+map8
+```
+
+```{r plot1, message=FALSE}
+# create binary version of racial diversity and quality of life
+# this will be used for the following plots
+nj_rwj_df$race_div_bin <- ifelse(nj_rwj_df$race_div > mean(nj_rwj_df$race_div),
+                                 "High Diversity",
+                                 "Low Diversity")
+nj_rwj_df$Qual_Life_bin <- ifelse(nj_rwj_df$QL.Rank > mean(nj_rwj_df$QL.Rank),
+                                  "High Quality of Life",
+                                  "Low Quality of Life")
+
+plot1 = ggplot(nj_rwj_df, 
+                     aes(x = race_div_bin, # binary outcomes on x axis
+                         y = QL.Rank, # continuous metric on y axis
+                         group = race_div_bin, 
+                         color = race_div_bin, 
+                         fill = race_div_bin)) + 
+  geom_boxplot() + 
+  labs(title="Boxplots", 
+       subtitle= "Quality of Life by Racial Diversity",
+       y="Quality of Life", 
+       x="Racial Diversity") +
+  scale_colour_brewer(palette = "Set3") +
+  theme(legend.position = "none")
+
+plot1
+```
+
+```{r plot2, message=FALSE}
+plot2 = ggplot(nj_rwj_df, 
+                aes(x = Qual_Life_bin, 
+                    y = race_div, 
+                    group = Qual_Life_bin, 
+                    color = Qual_Life_bin, 
+                    fill = Qual_Life_bin)) + 
+  geom_boxplot() + 
+  labs(title="Boxplots", 
+       subtitle= "Racial Diversity by Quality of Life",
+       y="Racial Diversity", 
+       x="Quality of Life") +
+  scale_colour_brewer(palette = "Set3") +
+  theme(legend.position = "none")
+
+plot2
+```
+
+```{r final, message=FALSE}
+# create multipanel figure
+# TO DO: add a overall title
+full_plot = ggarrange(map7,
+                       map8,
+                       plot1,
+                       plot2,
+                       ncol = 2,
+                       nrow = 2)
+
+full_plot
+```
 
